@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PSSS Dashboard – CVSS × EPSS × PSSS</title>
+
+  <!-- Bootstrap -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- PapaParse for CSV reading -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <style>
+    body { padding: 30px; background: #f8f9fa; }
+    canvas { background: white; border-radius: 10px; padding: 10px; }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1 class="text-center mb-4">PSSS MODEL DASHBOARD</h1>
+  <p class="text-center">Upload your <b>nvd_psss_with_attack.csv</b> or <b>df_attack extracted CSV</b></p>
+
+  <!-- File upload -->
+  <div class="text-center mb-4">
+      <input type="file" id="fileInput" class="form-control" style="max-width:400px; margin:auto;">
+  </div>
+
+  <!-- Chart -->
+  <div class="card p-4 mb-4">
+    <canvas id="scoreChart" height="100"></canvas>
+  </div>
+
+  <!-- Table -->
+  <div class="card p-4">
+    <h4>CVEs Table (CVSS / EPSS / PSSS)</h4>
+    <table class="table table-striped" id="cveTable">
+      <thead>
+        <tr>
+          <th>CVE ID</th>
+          <th>CVSS_norm</th>
+          <th>EPSS</th>
+          <th>PSSS_final</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+let chart;  // store chart instance
+
+document.getElementById("fileInput").addEventListener("change", function(e){
+    const file = e.target.files[0];
+
+    Papa.parse(file, {
+        header: true,
+        dynamicTyping: true,
+        complete: function(results) {
+            const data = results.data;
+
+            // Filter valid entries
+            const filtered = data.filter(row => 
+                row.cve_id && row.CVSS_base_final && row.epss && row.PSSS_final
+            );
+
+            // Sort by PSSS_final
+            filtered.sort((a,b) => b.PSSS_final - a.PSSS_final);
+
+            // Take top 20
+            const top20 = filtered.slice(0,20);
+
+            plotChart(top20);
+            populateTable(top20);
+        }
+    });
+});
+
+function plotChart(rows){
+    const labels = rows.map(r => r.cve_id);
+    const cvss_norm = rows.map(r => r.CVSS_base_final/10);
+    const epss = rows.map(r => r.epss);
+    const psss = rows.map(r => r.PSSS_final);
+
+    const ctx = document.getElementById("scoreChart").getContext("2d");
+
+    if(chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: "CVSS (normalized)",
+                    data: cvss_norm,
+                    backgroundColor: "skyblue"
+                },
+                {
+                    label: "EPSS",
+                    data: epss,
+                    backgroundColor: "orange"
+                },
+                {
+                    label: "PSSS_final",
+                    data: psss,
+                    backgroundColor: "green"
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: "top" }
+            },
+            scales: {
+                x: { stacked: false },
+                y: { beginAtZero: true, max: 1 }
+            }
+        }
+    });
+}
+
+function populateTable(rows){
+    const tbody = document.querySelector("#cveTable tbody");
+    tbody.innerHTML = "";
+
+    rows.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${r.cve_id}</td>
+            <td>${(r.CVSS_base_final/10).toFixed(3)}</td>
+            <td>${r.epss.toFixed(3)}</td>
+            <td>${r.PSSS_final.toFixed(3)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+</script>
+
+</body>
+</html>
